@@ -10,23 +10,18 @@ import liquibase.database.jvm.JdbcConnection;
 import liquibase.exception.DatabaseException;
 import liquibase.exception.UnexpectedLiquibaseException;
 import liquibase.logging.LogFactory;
-import liquibase.snapshot.InvalidExampleException;
-import liquibase.snapshot.DatabaseSnapshot;
-import liquibase.snapshot.JdbcDatabaseSnapshot;
+import liquibase.snapshot.*;
 import liquibase.statement.DatabaseFunction;
 import liquibase.structure.DatabaseObject;
 import liquibase.structure.core.*;
 import liquibase.util.StringUtils;
 
 import java.math.BigDecimal;
-import java.math.BigInteger;
 import java.sql.*;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Scanner;
 
 public class ColumnSnapshotGenerator extends JdbcSnapshotGenerator {
@@ -41,7 +36,7 @@ public class ColumnSnapshotGenerator extends JdbcSnapshotGenerator {
         Relation relation = ((Column) example).getRelation();
         Schema schema = relation.getSchema();
 
-        List<JdbcDatabaseSnapshot.CachedRow> columnMetadataRs = null;
+        List<CachedRow> columnMetadataRs = null;
         try {
 
             JdbcDatabaseSnapshot.CachingDatabaseMetaData databaseMetaData = ((JdbcDatabaseSnapshot) snapshot).getMetaData();
@@ -49,7 +44,7 @@ public class ColumnSnapshotGenerator extends JdbcSnapshotGenerator {
             columnMetadataRs = databaseMetaData.getColumns(((AbstractJdbcDatabase) database).getJdbcCatalogName(schema), ((AbstractJdbcDatabase) database).getJdbcSchemaName(schema), relation.getName(), example.getName());
 
             if (columnMetadataRs.size() > 0) {
-                JdbcDatabaseSnapshot.CachedRow data = columnMetadataRs.get(0);
+                CachedRow data = columnMetadataRs.get(0);
                 return readColumn(data, relation, database);
             } else {
                 return null;
@@ -67,7 +62,7 @@ public class ColumnSnapshotGenerator extends JdbcSnapshotGenerator {
         if (foundObject instanceof Relation) {
             Database database = snapshot.getDatabase();
             Relation relation = (Relation) foundObject;
-            List<JdbcDatabaseSnapshot.CachedRow> allColumnsMetadataRs = null;
+            List<CachedRow> allColumnsMetadataRs = null;
             try {
 
                 JdbcDatabaseSnapshot.CachingDatabaseMetaData databaseMetaData = ((JdbcDatabaseSnapshot) snapshot).getMetaData();
@@ -77,7 +72,7 @@ public class ColumnSnapshotGenerator extends JdbcSnapshotGenerator {
                 schema = relation.getSchema();
                 allColumnsMetadataRs = databaseMetaData.getColumns(((AbstractJdbcDatabase) database).getJdbcCatalogName(schema), ((AbstractJdbcDatabase) database).getJdbcSchemaName(schema), relation.getName(), null);
 
-                for (JdbcDatabaseSnapshot.CachedRow row : allColumnsMetadataRs) {
+                for (CachedRow row : allColumnsMetadataRs) {
                     Column exampleColumn = new Column().setRelation(relation).setName(row.getString("COLUMN_NAME"));
                     relation.getColumns().add(exampleColumn);
                 }
@@ -88,7 +83,7 @@ public class ColumnSnapshotGenerator extends JdbcSnapshotGenerator {
 
     }
 
-    protected Column readColumn(JdbcDatabaseSnapshot.CachedRow columnMetadataResultSet, Relation table, Database database) throws SQLException, DatabaseException {
+    protected Column readColumn(CachedRow columnMetadataResultSet, Relation table, Database database) throws SQLException, DatabaseException {
         String rawTableName = (String) columnMetadataResultSet.get("TABLE_NAME");
         String rawColumnName = (String) columnMetadataResultSet.get("COLUMN_NAME");
         String rawSchemaName = StringUtils.trimToNull((String) columnMetadataResultSet.get("TABLE_SCHEM"));
@@ -104,51 +99,62 @@ public class ColumnSnapshotGenerator extends JdbcSnapshotGenerator {
         column.setRelation(table);
         column.setRemarks(remarks);
 
-        int nullable = columnMetadataResultSet.getInt("NULLABLE");
-        if (nullable == DatabaseMetaData.columnNoNulls) {
-            column.setNullable(false);
-        } else if (nullable == DatabaseMetaData.columnNullable) {
-            column.setNullable(true);
-        } else if (nullable == DatabaseMetaData.columnNullableUnknown) {
-            LogFactory.getLogger().info("Unknown nullable state for column " + column.toString() + ". Assuming nullable");
-            column.setNullable(true);
+        if (database instanceof OracleDatabase) {
+            String nullable = columnMetadataResultSet.getString("NULLABLE");
+            if (nullable.equals("Y")) {
+                column.setNullable(true);
+            } else {
+                column.setNullable(false);
+            }
+        } else {
+            int nullable = columnMetadataResultSet.getInt("NULLABLE");
+            if (nullable == DatabaseMetaData.columnNoNulls) {
+                column.setNullable(false);
+            } else if (nullable == DatabaseMetaData.columnNullable) {
+                column.setNullable(true);
+            } else if (nullable == DatabaseMetaData.columnNullableUnknown) {
+                LogFactory.getLogger().info("Unknown nullable state for column " + column.toString() + ". Assuming nullable");
+                column.setNullable(true);
+            }
         }
 
-        if (table instanceof Table) {
-            if (columnMetadataResultSet.containsColumn("IS_AUTOINCREMENT")) {
-                String isAutoincrement = (String) columnMetadataResultSet.get("IS_AUTOINCREMENT");
-                isAutoincrement = StringUtils.trimToNull(isAutoincrement);
-                if (isAutoincrement == null) {
-                    column.setAutoIncrementInformation(null);
-                } else if (isAutoincrement.equals("YES")) {
-                    column.setAutoIncrementInformation(new Column.AutoIncrementInformation());
-                } else if (isAutoincrement.equals("NO")) {
-                    column.setAutoIncrementInformation(null);
-                } else if (isAutoincrement.equals("")) {
-                    LogFactory.getLogger().info("Unknown auto increment state for column " + column.toString() + ". Assuming not auto increment");
-                    column.setAutoIncrementInformation(null);
-                } else {
-                    throw new UnexpectedLiquibaseException("Unknown is_autoincrement value: '" + isAutoincrement+"'");
-                }
-            } else {
-                //probably older version of java, need to select from the column to find out if it is auto-increment
-                String selectStatement = "select " + database.escapeColumnName(rawCatalogName, rawSchemaName, rawTableName, rawColumnName) + " from " + database.escapeTableName(rawCatalogName, rawSchemaName, rawTableName) + " where 0=1";
-                LogFactory.getLogger().debug("Checking "+rawTableName+"."+rawCatalogName+" for auto-increment with SQL: '"+selectStatement+"'");
-                Connection underlyingConnection = ((JdbcConnection) database.getConnection()).getUnderlyingConnection();
-                Statement statement = underlyingConnection.createStatement();
-                ResultSet columnSelectRS = statement.executeQuery(selectStatement);
-                try {
-                    if (columnSelectRS.getMetaData().isAutoIncrement(1)) {
-                        column.setAutoIncrementInformation(new Column.AutoIncrementInformation());
-                    } else {
+        if (database.supportsAutoIncrement()) {
+            if (table instanceof Table) {
+                if (columnMetadataResultSet.containsColumn("IS_AUTOINCREMENT")) {
+                    String isAutoincrement = (String) columnMetadataResultSet.get("IS_AUTOINCREMENT");
+                    isAutoincrement = StringUtils.trimToNull(isAutoincrement);
+                    if (isAutoincrement == null) {
                         column.setAutoIncrementInformation(null);
+                    } else if (isAutoincrement.equals("YES")) {
+                        column.setAutoIncrementInformation(new Column.AutoIncrementInformation());
+                    } else if (isAutoincrement.equals("NO")) {
+                        column.setAutoIncrementInformation(null);
+                    } else if (isAutoincrement.equals("")) {
+                        LogFactory.getLogger().info("Unknown auto increment state for column " + column.toString() + ". Assuming not auto increment");
+                        column.setAutoIncrementInformation(null);
+                    } else {
+                        throw new UnexpectedLiquibaseException("Unknown is_autoincrement value: '" + isAutoincrement+"'");
                     }
-                } finally {
+                } else {
+                    //probably older version of java, need to select from the column to find out if it is auto-increment
+                    String selectStatement = "select " + database.escapeColumnName(rawCatalogName, rawSchemaName, rawTableName, rawColumnName) + " from " + database.escapeTableName(rawCatalogName, rawSchemaName, rawTableName) + " where 0=1";
+                    LogFactory.getLogger().debug("Checking "+rawTableName+"."+rawCatalogName+" for auto-increment with SQL: '"+selectStatement+"'");
+                    Connection underlyingConnection = ((JdbcConnection) database.getConnection()).getUnderlyingConnection();
+                    Statement statement = underlyingConnection.createStatement();
+                    ResultSet columnSelectRS = statement.executeQuery(selectStatement);
                     try {
-                        statement.close();
-                    } catch (SQLException ignore) {
+                        if (columnSelectRS.getMetaData().isAutoIncrement(1)) {
+                            column.setAutoIncrementInformation(new Column.AutoIncrementInformation());
+                        } else {
+                            column.setAutoIncrementInformation(null);
+                        }
+                    } finally {
+                        try {
+                            statement.close();
+                        } catch (SQLException ignore) {
+                        }
+                        columnSelectRS.close();
                     }
-                    columnSelectRS.close();
                 }
             }
         }
@@ -161,7 +167,43 @@ public class ColumnSnapshotGenerator extends JdbcSnapshotGenerator {
         return column;
     }
 
-    protected DataType readDataType(JdbcDatabaseSnapshot.CachedRow columnMetadataResultSet, Column column, Database database) throws SQLException {
+    protected DataType readDataType(CachedRow columnMetadataResultSet, Column column, Database database) throws SQLException {
+
+        if (database instanceof OracleDatabase) {
+            String dataType = columnMetadataResultSet.getString("DATA_TYPE");
+            dataType = dataType.replace("VARCHAR2", "VARCHAR");
+            dataType = dataType.replace("NVARCHAR2", "NVARCHAR");
+
+            DataType type = new DataType(dataType);
+//            type.setDataTypeId(dataType);
+            if (dataType.equalsIgnoreCase("NUMBER")) {
+                type.setColumnSize(columnMetadataResultSet.getInt("DATA_PRECISION"));
+                if (type.getColumnSize() == null) {
+                    type.setColumnSize(38);
+                }
+                type.setDecimalDigits(columnMetadataResultSet.getInt("DATA_SCALE"));
+//            type.setRadix(10);
+            } else {
+                type.setColumnSize(columnMetadataResultSet.getInt("DATA_LENGTH"));
+
+                if (dataType.equalsIgnoreCase("NVARCHAR")) {
+                    //data length is in bytes but specified in chars
+                    type.setColumnSize(type.getColumnSize() / 2);
+                    type.setColumnSizeUnit(DataType.ColumnSizeUnit.CHAR);
+                } else {
+                    String charUsed = columnMetadataResultSet.getString("CHAR_USED");
+                    DataType.ColumnSizeUnit unit = null;
+                    if ("C".equals(charUsed)) {
+                        unit = DataType.ColumnSizeUnit.CHAR;
+                    }
+                    type.setColumnSizeUnit(unit);
+                }
+            }
+
+
+            return type;
+        }
+
         String columnTypeName = (String) columnMetadataResultSet.get("TYPE_NAME");
 
         if (database instanceof FirebirdDatabase) {
@@ -180,9 +222,6 @@ public class ColumnSnapshotGenerator extends JdbcSnapshotGenerator {
         // don't set size for types like int4, int8 etc
         if (database.dataTypeIsNotModifiable(columnTypeName)) {
             columnSize = null;
-        }  else if (database instanceof OracleDatabase && columnTypeName.equals("NVARCHAR2")) {
-            columnSize = columnSize / 2; //oracle returns value in bytes, not chars
-            columnSizeUnit = DataType.ColumnSizeUnit.CHAR;
         }
 
         Integer decimalDigits = columnMetadataResultSet.getInt("DECIMAL_DIGITS");
@@ -205,16 +244,14 @@ public class ColumnSnapshotGenerator extends JdbcSnapshotGenerator {
         return type;
     }
 
-    protected Object readDefaultValue(JdbcDatabaseSnapshot.CachedRow columnMetadataResultSet, Column columnInfo, Database database) throws SQLException, DatabaseException {
+    protected Object readDefaultValue(CachedRow columnMetadataResultSet, Column columnInfo, Database database) throws SQLException, DatabaseException {
         if (database instanceof MSSQLDatabase) {
             Object defaultValue = columnMetadataResultSet.get("COLUMN_DEF");
 
             if (defaultValue != null && defaultValue instanceof String) {
-                String newValue = null;
                 if (defaultValue.equals("(NULL)")) {
-                    newValue = null;
+                    columnMetadataResultSet.set("COLUMN_DEF", null);
                 }
-                columnMetadataResultSet.set("COLUMN_DEF", newValue);
             }
         }
 
@@ -230,6 +267,10 @@ public class ColumnSnapshotGenerator extends JdbcSnapshotGenerator {
 
         if (stringVal.startsWith("'") && stringVal.endsWith("'")) {
             stringVal = stringVal.substring(1, stringVal.length() - 1);
+        } else if (stringVal.startsWith("((") && stringVal.endsWith("))")) {
+            stringVal = stringVal.substring(2, stringVal.length() - 2);
+        } else if (stringVal.startsWith("('") && stringVal.endsWith("')")) {
+            stringVal = stringVal.substring(2, stringVal.length() - 2);
         } else if (stringVal.startsWith("(") && stringVal.endsWith(")")) {
             return new DatabaseFunction(stringVal.substring(1, stringVal.length() - 1));
         }
@@ -263,6 +304,9 @@ public class ColumnSnapshotGenerator extends JdbcSnapshotGenerator {
             } else if (type == Types.DATALINK) {
                 return new DatabaseFunction(stringVal);
             } else if (type == Types.DATE) {
+                if (zeroTime(stringVal)) {
+                    return new DatabaseFunction(stringVal);
+                }
                 return new java.sql.Date(getDateFormat(database).parse(stringVal.trim()).getTime());
             } else if (type == Types.DECIMAL && scanner.hasNextBigDecimal()) {
                 return scanner.nextBigDecimal();
@@ -307,8 +351,14 @@ public class ColumnSnapshotGenerator extends JdbcSnapshotGenerator {
             } else if (type == Types.STRUCT) {
                 return new DatabaseFunction(stringVal);
             } else if (type == Types.TIME) {
+                if (zeroTime(stringVal)) {
+                    return new DatabaseFunction(stringVal);
+                }
                 return new java.sql.Time(getTimeFormat(database).parse(stringVal).getTime());
             } else if (type == Types.TIMESTAMP) {
+                if (zeroTime(stringVal)) {
+                    return new DatabaseFunction(stringVal);
+                }
                 return new Timestamp(getDateTimeFormat(database).parse(stringVal).getTime());
             } else if (type == Types.TINYINT && scanner.hasNextInt()) {
                 return scanner.nextInt();
@@ -323,6 +373,10 @@ public class ColumnSnapshotGenerator extends JdbcSnapshotGenerator {
         } catch (ParseException e) {
             return new DatabaseFunction(stringVal);
         }
+    }
+
+    private boolean zeroTime(String stringVal) {
+        return stringVal.replace("-","").replace(":", "").replace(" ","").replace("0","").equals("");
     }
 
     protected DateFormat getDateFormat(Database database) {

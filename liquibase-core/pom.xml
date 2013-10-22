@@ -10,19 +10,25 @@
     <parent>
       <groupId>org.liquibase</groupId>
       <artifactId>liquibase-parent</artifactId>
-      <version>3.1.0-SNAPSHOT</version>
+      <version>3.0.7-SNAPSHOT</version>
       <relativePath>../pom.xml</relativePath>
     </parent>
     
     <properties>
         <bundle.namespace>liquibase.*</bundle.namespace>
-        <project.version>3.1.0</project.version>
+        <project.version>3.0.7</project.version>
     </properties>
 
     <dependencies>
         <dependency>
           <groupId>junit</groupId>
           <artifactId>junit</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.hamcrest</groupId>
+            <artifactId>hamcrest-library</artifactId>
             <scope>test</scope>
         </dependency>
 
@@ -65,16 +71,6 @@
         <dependency>
           <groupId>org.springframework</groupId>
           <artifactId>spring</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>javax.enterprise</groupId>
-            <artifactId>cdi-api</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>org.jboss.weld.se</groupId>
-            <artifactId>weld-se</artifactId>
         </dependency>
 
         <dependency>

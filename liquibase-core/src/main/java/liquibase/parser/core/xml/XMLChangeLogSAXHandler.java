@@ -13,7 +13,6 @@ import java.util.jar.JarFile;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import liquibase.Contexts;
 import liquibase.change.Change;
 import liquibase.change.ChangeFactory;
 import liquibase.change.ChangeWithColumns;
@@ -37,9 +36,9 @@ import liquibase.database.ObjectQuotingStrategy;
 import liquibase.exception.CustomChangeException;
 import liquibase.exception.LiquibaseException;
 import liquibase.exception.MigrationFailedException;
+import liquibase.exception.UnknownChangelogFormatException;
 import liquibase.logging.LogFactory;
 import liquibase.logging.Logger;
-import liquibase.parser.ChangeLogParser;
 import liquibase.parser.ChangeLogParserFactory;
 import liquibase.precondition.CustomPreconditionWrapper;
 import liquibase.precondition.Precondition;
@@ -54,7 +53,6 @@ import liquibase.util.FileUtil;
 import liquibase.util.ObjectUtil;
 import liquibase.util.StringUtils;
 import liquibase.util.file.FilenameUtils;
-
 import org.xml.sax.Attributes;
 import org.xml.sax.SAXException;
 import org.xml.sax.helpers.DefaultHandler;
@@ -81,7 +79,7 @@ class XMLChangeLogSAXHandler extends DefaultHandler {
 
 	private boolean inModifySql = false;
 	private Set<String> modifySqlDbmsList;
-	private Contexts modifySqlContexts;
+	private Set<String> modifySqlContexts;
 	private boolean modifySqlAppliedOnRollback = false;
 
 	protected XMLChangeLogSAXHandler(String physicalChangeLogLocation,
@@ -175,6 +173,7 @@ class XMLChangeLogSAXHandler extends DefaultHandler {
 
 				Enumeration<URL> resourcesEnum = resourceAccessor.getResources(pathName);
                 SortedSet<URL> resources = new TreeSet<URL>(new Comparator<URL>() {
+                    @Override
                     public int compare(URL o1, URL o2) {
                         return o1.toString().compareTo(o2.toString());
                     }
@@ -335,7 +334,8 @@ class XMLChangeLogSAXHandler extends DefaultHandler {
 							.splitAndTrim(atts.getValue("dbms"), ","));
 				}
 				if (StringUtils.trimToNull(atts.getValue("context")) != null) {
-					modifySqlContexts = new Contexts(atts.getValue("context"));
+					modifySqlContexts = new HashSet<String>(StringUtils
+							.splitAndTrim(atts.getValue("context"), ","));
 				}
 				if (StringUtils.trimToNull(atts.getValue("applyToRollback")) != null) {
 					modifySqlAppliedOnRollback = Boolean.valueOf(atts
@@ -504,19 +504,11 @@ class XMLChangeLogSAXHandler extends DefaultHandler {
         }
     }
 
-    protected boolean handleIncludedChangeLog(String fileName,
-			boolean isRelativePath, String relativeBaseFileName)
-			throws LiquibaseException {
+  protected boolean handleIncludedChangeLog(String fileName,
+	  boolean isRelativePath, String relativeBaseFileName)
+	  throws LiquibaseException {
 
         if (fileName.equalsIgnoreCase(".svn") || fileName.equalsIgnoreCase("cvs")) {
-            return false;
-        }
-
-        ChangeLogParser changeLogParser = null;
-        try {
-            changeLogParser = ChangeLogParserFactory.getInstance().getParser(fileName, resourceAccessor);
-        } catch (LiquibaseException e) {
-            log.warning("included file "+relativeBaseFileName + "/" + fileName + " is not a recognized file type");
             return false;
         }
 
@@ -529,9 +521,15 @@ class XMLChangeLogSAXHandler extends DefaultHandler {
 				fileName = FilenameUtils.getFullPath(relativeBaseFileName) + fileName;
 			}
 		}
-		DatabaseChangeLog changeLog = ChangeLogParserFactory.getInstance().getParser(fileName, resourceAccessor).parse(fileName, changeLogParameters,
-						resourceAccessor);
-		PreconditionContainer preconditions = changeLog.getPreconditions();
+      DatabaseChangeLog changeLog;
+      try {
+         changeLog= ChangeLogParserFactory.getInstance().getParser(fileName, resourceAccessor).parse(fileName, changeLogParameters,
+                resourceAccessor);
+      } catch (UnknownChangelogFormatException e) {
+        log.warning("included file "+relativeBaseFileName + "/" + fileName + " is not a recognized file type");
+                    return false;
+      }
+      PreconditionContainer preconditions = changeLog.getPreconditions();
 		if (preconditions != null) {
 			if (null == databaseChangeLog.getPreconditions()) {
 				databaseChangeLog.setPreconditions(new PreconditionContainer());
@@ -610,7 +608,7 @@ class XMLChangeLogSAXHandler extends DefaultHandler {
 				text = new StringBuffer();
 			} else if (change != null && "where".equals(qName)) {
 				if (change instanceof AbstractModifyDataChange) {
-					((AbstractModifyDataChange) change).setWhereClause(textString);
+					((AbstractModifyDataChange) change).setWhere(textString);
 				} else {
 					throw new RuntimeException("Unexpected change type: "
 							+ change.getClass().getName());
@@ -728,52 +726,64 @@ class XMLChangeLogSAXHandler extends DefaultHandler {
 			this.attributes = attributes;
 		}
 
-		public int getLength() {
+		@Override
+        public int getLength() {
 			return attributes.getLength();
 		}
 
-		public String getURI(int index) {
+		@Override
+        public String getURI(int index) {
 			return attributes.getURI(index);
 		}
 
-		public String getLocalName(int index) {
+		@Override
+        public String getLocalName(int index) {
 			return attributes.getLocalName(index);
 		}
 
-		public String getQName(int index) {
+		@Override
+        public String getQName(int index) {
 			return attributes.getQName(index);
 		}
 
-		public String getType(int index) {
+		@Override
+        public String getType(int index) {
 			return attributes.getType(index);
 		}
 
-		public String getValue(int index) {
+		@Override
+        public String getValue(int index) {
 			return attributes.getValue(index);
 		}
 
-		public int getIndex(String uri, String localName) {
+		@Override
+        public int getIndex(String uri, String localName) {
 			return attributes.getIndex(uri, localName);
 		}
 
-		public int getIndex(String qName) {
+		@Override
+        public int getIndex(String qName) {
 			return attributes.getIndex(qName);
 		}
 
-		public String getType(String uri, String localName) {
+		@Override
+        public String getType(String uri, String localName) {
 			return attributes.getType(uri, localName);
 		}
 
-		public String getType(String qName) {
+		@Override
+        public String getType(String qName) {
 			return attributes.getType(qName);
 		}
 
-		public String getValue(String uri, String localName) {
+		@Override
+        public String getValue(String uri, String localName) {
 			return changeLogParameters.expandExpressions(attributes.getValue(
 					uri, localName));
 		}
 
-		public String getValue(String qName) {
+		@Override
+        public String getValue(String qName) {
 			return changeLogParameters.expandExpressions(attributes
 					.getValue(qName));
 		}

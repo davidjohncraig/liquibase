@@ -7,6 +7,8 @@ import java.math.BigInteger;
 
 public class Column extends AbstractDatabaseObject {
 
+    private String name;
+
     public Column() {
     }
 
@@ -14,6 +16,7 @@ public class Column extends AbstractDatabaseObject {
         return getAttribute("relation", Relation.class);
     }
 
+    @Override
     public DatabaseObject[] getContainingObjects() {
         return new DatabaseObject[] {
                 getRelation()
@@ -27,6 +30,7 @@ public class Column extends AbstractDatabaseObject {
     }
 
 
+    @Override
     public Schema getSchema() {
         Relation relation = getRelation();
         if (relation == null) {
@@ -35,11 +39,14 @@ public class Column extends AbstractDatabaseObject {
         return relation.getSchema();
     }
 
-	public String getName() {
-        return getAttribute("name", String.class);
+	@Override
+    public String getName() {
+        return name;
     }
 
+    @Override
     public Column setName(String name) {
+        this.name = name;
         setAttribute("name", name);
 
         return this;
@@ -213,6 +220,11 @@ public class Column extends AbstractDatabaseObject {
 
         public BigInteger getIncrementBy() {
             return incrementBy;
+        }
+
+        @Override
+        public String toString() {
+            return "AUTO INCREMENT START WITH "+startWith+" INCREMENT BY "+incrementBy;
         }
     }
 }

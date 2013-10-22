@@ -1,6 +1,5 @@
 package liquibase.changelog.filter;
 
-import liquibase.Contexts;
 import liquibase.changelog.ChangeSet;
 import liquibase.util.StringUtils;
 import liquibase.sql.visitor.SqlVisitor;
@@ -8,20 +7,32 @@ import liquibase.sql.visitor.SqlVisitor;
 import java.util.*;
 
 public class ContextChangeSetFilter implements ChangeSetFilter {
-    private Contexts contexts;
-
-    public ContextChangeSetFilter() {
-        this(new Contexts());
-    }
+    private Set<String> contexts;
 
     public ContextChangeSetFilter(String... contexts) {
-        this(new Contexts(contexts));
+        this.contexts = new HashSet<String>();
+        if (contexts != null) {
+            for (int i=0; i<contexts.length; i++) {
+                if (contexts[i] != null) {
+                    contexts[i] = contexts[i].toLowerCase();
+                }
+            }
+
+            if (contexts.length == 1) {
+                if (contexts[0] == null) {
+                    //do nothing
+                } else if (contexts[0].indexOf(",") >= 0) {
+                    this.contexts.addAll(StringUtils.splitAndTrim(contexts[0], ","));
+                } else {
+                    this.contexts.add(contexts[0]);
+                }
+            } else {
+                this.contexts.addAll(Arrays.asList(contexts));
+            }
+        }
     }
 
-    public ContextChangeSetFilter(Contexts contexts) {
-        this.contexts = contexts;
-    }
-
+    @Override
     public boolean accepts(ChangeSet changeSet) {
         List<SqlVisitor> visitorsToRemove = new ArrayList<SqlVisitor>();
         for (SqlVisitor visitor : changeSet.getSqlVisitors()) {
@@ -43,7 +54,7 @@ public class ContextChangeSetFilter implements ChangeSetFilter {
             return true;
         }
 
-        if (changeSet.getContexts() == null || changeSet.getContexts().size() == 0) {
+        if (changeSet.getContexts() == null) {
             return true;
         }
         

@@ -1,7 +1,18 @@
 package liquibase.datatype.core;
 
 import liquibase.database.Database;
-import liquibase.database.core.*;
+import liquibase.database.core.CacheDatabase;
+import liquibase.database.core.DB2Database;
+import liquibase.database.core.DerbyDatabase;
+import liquibase.database.core.FirebirdDatabase;
+import liquibase.database.core.HsqlDatabase;
+import liquibase.database.core.InformixDatabase;
+import liquibase.database.core.MSSQLDatabase;
+import liquibase.database.core.MySQLDatabase;
+import liquibase.database.core.OracleDatabase;
+import liquibase.database.core.SQLiteDatabase;
+import liquibase.database.core.SybaseASADatabase;
+import liquibase.database.core.SybaseDatabase;
 import liquibase.datatype.DataTypeInfo;
 import liquibase.datatype.DatabaseDataType;
 import liquibase.datatype.LiquibaseDataType;
@@ -26,7 +37,11 @@ public class BooleanType extends LiquibaseDataType {
         } else if (database instanceof SybaseASADatabase || database instanceof SybaseDatabase) {
             return new DatabaseDataType("BIT");
         } else if (database instanceof DerbyDatabase) {
-            return new DatabaseDataType("SMALLINT");
+            if (((DerbyDatabase) database).supportsBooleanDataType()) {
+                return new DatabaseDataType("BOOLEAN");
+            } else {
+                return new DatabaseDataType("SMALLINT");
+            }
         } else if (database instanceof HsqlDatabase) {
             return new DatabaseDataType("BOOLEAN");
         }
@@ -45,7 +60,7 @@ public class BooleanType extends LiquibaseDataType {
             if (((String) value).equalsIgnoreCase("true") || value.equals("1") || value.equals("t") || ((String) value).equalsIgnoreCase(this.getTrueBooleanValue(database))) {
                 returnValue = this.getTrueBooleanValue(database);
             } else if (((String) value).equalsIgnoreCase("false") || value.equals("0") || value.equals("f") || ((String) value).equalsIgnoreCase(this.getFalseBooleanValue(database))) {
-                returnValue = this.getTrueBooleanValue(database);
+                returnValue = this.getFalseBooleanValue(database);
             } else {
                 throw new UnexpectedLiquibaseException("Unknown boolean value: " + value);
             }
@@ -67,16 +82,18 @@ public class BooleanType extends LiquibaseDataType {
     }
 
     protected boolean isNumericBoolean(Database database) {
+        if (database instanceof DerbyDatabase) {
+            return !((DerbyDatabase) database).supportsBooleanDataType();
+        }
         return database instanceof CacheDatabase
                 || database instanceof DB2Database
                 || database instanceof FirebirdDatabase
                 || database instanceof MSSQLDatabase
                 || database instanceof MySQLDatabase
                 || database instanceof OracleDatabase
+                || database instanceof SQLiteDatabase
                 || database instanceof SybaseASADatabase
-                || database instanceof SybaseDatabase
-                || database instanceof DerbyDatabase;
-
+                || database instanceof SybaseDatabase;
     }
 
     /**

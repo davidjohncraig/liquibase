@@ -1,6 +1,5 @@
 package liquibase.changelog;
 
-import liquibase.Contexts;
 import liquibase.changelog.filter.ContextChangeSetFilter;
 import liquibase.changelog.filter.DbmsChangeSetFilter;
 import liquibase.changelog.visitor.ValidatingVisitor;
@@ -12,7 +11,8 @@ import liquibase.logging.LogFactory;
 import liquibase.precondition.Conditional;
 import liquibase.precondition.core.PreconditionContainer;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Encapsulates the information stored in the change log XML file.
@@ -33,10 +33,12 @@ public class DatabaseChangeLog implements Comparable<DatabaseChangeLog>, Conditi
         this.physicalFilePath = physicalFilePath;
     }
 
+    @Override
     public PreconditionContainer getPreconditions() {
         return preconditionContainer;
     }
 
+    @Override
     public void setPreconditions(PreconditionContainer precond) {
         preconditionContainer = precond;
     }
@@ -91,6 +93,7 @@ public class DatabaseChangeLog implements Comparable<DatabaseChangeLog>, Conditi
         return getFilePath();
     }
 
+    @Override
     public int compareTo(DatabaseChangeLog o) {
         return getFilePath().compareTo(o.getFilePath());
     }
@@ -136,10 +139,6 @@ public class DatabaseChangeLog implements Comparable<DatabaseChangeLog>, Conditi
     }
 
     public void validate(Database database, String... contexts) throws LiquibaseException {
-        this.validate(database, new Contexts(contexts));
-    }
-
-    public void validate(Database database, Contexts contexts) throws LiquibaseException {
 
         ChangeLogIterator logIterator = new ChangeLogIterator(this, new DbmsChangeSetFilter(database), new ContextChangeSetFilter(contexts));
 

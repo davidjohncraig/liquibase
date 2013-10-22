@@ -1,7 +1,6 @@
 package liquibase.database;
 
 import liquibase.CatalogAndSchema;
-import liquibase.Contexts;
 import liquibase.change.Change;
 import liquibase.changelog.ChangeSet;
 import liquibase.changelog.DatabaseChangeLog;
@@ -144,8 +143,6 @@ public interface Database extends PrioritizedService {
     public void setCanCacheLiquibaseTableInfo(boolean canCacheLiquibaseTableInfo);
 
     boolean hasDatabaseChangeLogLockTable() throws DatabaseException;
-
-    void checkDatabaseChangeLogTable(boolean updateExistingNullChecksums, DatabaseChangeLog databaseChangeLog, Contexts contexts) throws DatabaseException;
 
     void checkDatabaseChangeLogTable(boolean updateExistingNullChecksums, DatabaseChangeLog databaseChangeLog, String[] contexts) throws DatabaseException;
 
@@ -340,5 +337,7 @@ public interface Database extends PrioritizedService {
     boolean getOutputDefaultCatalog();
 
     void setOutputDefaultCatalog(boolean outputDefaultCatalog);
+
+    boolean supportsPrimaryKeyNames();
 }
 

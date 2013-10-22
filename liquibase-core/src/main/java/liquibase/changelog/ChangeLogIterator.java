@@ -4,6 +4,8 @@ import liquibase.changelog.filter.*;
 import liquibase.changelog.visitor.ChangeSetVisitor;
 import liquibase.database.Database;
 import liquibase.exception.LiquibaseException;
+import liquibase.logging.LogFactory;
+import liquibase.logging.Logger;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -38,29 +40,33 @@ public class ChangeLogIterator {
     }
 
     public void run(ChangeSetVisitor visitor, Database database) throws LiquibaseException {
-        List<ChangeSet> changeSetList = databaseChangeLog.getChangeSets();
-        if (visitor.getDirection().equals(ChangeSetVisitor.Direction.REVERSE)) {
-            Collections.reverse(changeSetList);
-        }
+      Logger log = LogFactory.getLogger();
+      log.setChangeLog(databaseChangeLog);
+        try {
+            List<ChangeSet> changeSetList = databaseChangeLog.getChangeSets();
+            if (visitor.getDirection().equals(ChangeSetVisitor.Direction.REVERSE)) {
+                Collections.reverse(changeSetList);
+            }
 
-        for (ChangeSet changeSet : changeSetList) {
-            boolean shouldVisit = true;
-            if (changeSetFilters != null) {
-                for (ChangeSetFilter filter : changeSetFilters) {
-                    if (!filter.accepts(changeSet)) {
-                        shouldVisit = false;
-                        break;
+            for (ChangeSet changeSet : changeSetList) {
+                boolean shouldVisit = true;
+                if (changeSetFilters != null) {
+                    for (ChangeSetFilter filter : changeSetFilters) {
+                        if (!filter.accepts(changeSet)) {
+                            shouldVisit = false;
+                            break;
+                        }
                     }
                 }
-            }
 
-            if (shouldVisit) {
-                visitor.visit(changeSet, databaseChangeLog, database);
+                if (shouldVisit) {
+                    log.setChangeSet(changeSet);
+                    visitor.visit(changeSet, databaseChangeLog, database);
+                    log.setChangeSet(null);
+                }
             }
+        } finally {
+            log.setChangeLog(null);
         }
-    }
-
-    public List<ChangeSetFilter> getChangeSetFilters() {
-        return Collections.unmodifiableList(changeSetFilters);
     }
 }

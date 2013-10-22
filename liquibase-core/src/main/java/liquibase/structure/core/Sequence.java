@@ -3,19 +3,43 @@ package liquibase.structure.core;
 import liquibase.structure.AbstractDatabaseObject;
 import liquibase.structure.DatabaseObject;
 
+import java.math.BigInteger;
+
 public class Sequence extends AbstractDatabaseObject {
 
+    @Override
     public DatabaseObject[] getContainingObjects() {
         return null;
     }
 
+    @Override
     public String getName() {
         return getAttribute("name", String.class);
     }
 
+    @Override
     public Sequence setName(String name) {
         this.setAttribute("name", name);
         return this;
+    }
+
+    public BigInteger getStartValue() {
+        return getAttribute("startValue", BigInteger.class);
+    }
+
+    public Sequence setStartValue(BigInteger startValue) {
+        this.setAttribute("startValue", startValue);
+        return this;
+    }
+
+    public BigInteger getIncrementBy() {
+        return getAttribute("incrementBy", BigInteger.class);
+    }
+
+    public Sequence setIncrementBy(BigInteger incrementBy) {
+        this.setAttribute("incrementBy", incrementBy);
+        return this;
+
     }
 
     @Override
@@ -43,7 +67,8 @@ public class Sequence extends AbstractDatabaseObject {
 	/**
 	 * @return Returns the schema.
 	 */
-	public Schema getSchema () {
+	@Override
+    public Schema getSchema () {
 		return getAttribute("schema", Schema.class);
 	}
 

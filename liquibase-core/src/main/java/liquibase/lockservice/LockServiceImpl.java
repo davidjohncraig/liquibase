@@ -27,33 +27,51 @@ public class LockServiceImpl implements LockService {
     private long changeLogLockWaitTime = 1000 * 60 * 5;  //default to 5 mins
     private long changeLogLocRecheckTime = 1000 * 10;  //default to every 10 seconds
 
+    public static final String LOCK_WAIT_TIME_SYSTEM_PROPERTY = "liquibase.changeLogLockWaitTimeInMinutes";
+
+    {
+        try {
+            changeLogLockWaitTime = 1000 * 60 * Long.parseLong(System.getProperty(LOCK_WAIT_TIME_SYSTEM_PROPERTY));
+            LogFactory.getLogger().info("lockWaitTime change to: " + changeLogLockWaitTime);
+        } catch (NumberFormatException e) {
+            // was non or not valid configuration, we will keep the standard value
+        }
+    }
+
     public LockServiceImpl() {
     }
 
+    @Override
     public int getPriority() {
         return PRIORITY_DEFAULT;
     }
 
+    @Override
     public boolean supports(Database database) {
         return true;
     }
 
+    @Override
     public void setDatabase(Database database) {
         this.database = database;
     }
 
+    @Override
     public void setChangeLogLockWaitTime(long changeLogLockWaitTime) {
         this.changeLogLockWaitTime = changeLogLockWaitTime;
     }
 
+    @Override
     public void setChangeLogLockRecheckTime(long changeLogLocRecheckTime) {
         this.changeLogLocRecheckTime = changeLogLocRecheckTime;
     }
 
+    @Override
     public boolean hasChangeLogLock() {
         return hasChangeLogLock;
     }
 
+    @Override
     public void waitForLock() throws LockException {
 
         boolean locked = false;
@@ -83,6 +101,7 @@ public class LockServiceImpl implements LockService {
         }
     }
 
+    @Override
     public boolean acquireLock() throws LockException {
         if (hasChangeLogLock) {
             return true;
@@ -130,6 +149,7 @@ public class LockServiceImpl implements LockService {
 
     }
 
+    @Override
     public void releaseLock() throws LockException {
         Executor executor = ExecutorService.getInstance().getExecutor(database);
         try {
@@ -158,6 +178,7 @@ public class LockServiceImpl implements LockService {
         }
     }
 
+    @Override
     public DatabaseChangeLogLock[] listLocks() throws LockException {
         try {
             if (!database.hasDatabaseChangeLogLockTable()) {
@@ -185,6 +206,7 @@ public class LockServiceImpl implements LockService {
         }
     }
 
+    @Override
     public void forceReleaseLock() throws LockException, DatabaseException {
         database.checkDatabaseChangeLogLockTable();
         releaseLock();
@@ -196,6 +218,7 @@ public class LockServiceImpl implements LockService {
         }*/
     }
 
+    @Override
     public void reset() {
         hasChangeLogLock = false;
     }

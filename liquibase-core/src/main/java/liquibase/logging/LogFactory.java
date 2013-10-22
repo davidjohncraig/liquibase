@@ -7,39 +7,10 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class LogFactory {
+    private static Map<String, Logger> loggers = new HashMap<String, Logger>();
+    private static String defaultLoggingLevel = "info";
 
-    private static LogFactory instance;
-
-    private Map<String, Logger> loggers = new HashMap<String, Logger>();
-    private String defaultLoggingLevel = "info";
-
-
-    public static void reset() {
-        instance = new LogFactory();
-    }
-
-    public static LogFactory getInstance() {
-        if (instance == null) {
-            instance = new LogFactory();
-        }
-        return instance;
-    }
-
-    /**
-     * Set the instance used by this singleton. Used primarily for testing.
-     */
-    public static void setInstance(LogFactory instance) {
-        LogFactory.instance = instance;
-    }
-
-    /**
-     * @deprecated Use non-static {@link #getLog(String)} method
-     */
     public static Logger getLogger(String name) {
-        return getInstance().getLog(name);
-    }
-
-    public Logger getLog(String name) {
         if (!loggers.containsKey(name)) {
             Logger value;
             try {
@@ -55,25 +26,11 @@ public class LogFactory {
         return loggers.get(name);
     }
 
-    /**
-     * @deprecated Use non-static {@link #getLog()} method
-     */
     public static Logger getLogger() {
-        return getInstance().getLog();
+        return getLogger("liquibase");
     }
 
-    public Logger getLog() {
-        return getLog("liquibase");
-    }
-
-    public void setDefaultLoggingLevel(String defaultLoggingLevel) {
-        this.defaultLoggingLevel = defaultLoggingLevel;
-    }
-
-    /**
-     * @deprecated Use non-static {@link #setDefaultLoggingLevel(String)} method
-     */
     public static void setLoggingLevel(String defaultLoggingLevel) {
-        getInstance().defaultLoggingLevel = defaultLoggingLevel;
+        LogFactory.defaultLoggingLevel = defaultLoggingLevel;
     }
 }

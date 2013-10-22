@@ -25,6 +25,7 @@ import java.util.List;
 
 public class CreateTableGenerator extends AbstractSqlGenerator<CreateTableStatement> {
 
+    @Override
     public ValidationErrors validate(CreateTableStatement createTableStatement, Database database, SqlGeneratorChain sqlGeneratorChain) {
         ValidationErrors validationErrors = new ValidationErrors();
         validationErrors.checkRequiredField("tableName", createTableStatement.getTableName());
@@ -32,6 +33,7 @@ public class CreateTableGenerator extends AbstractSqlGenerator<CreateTableStatem
         return validationErrors;
     }
 
+    @Override
     public Sql[] generateSql(CreateTableStatement statement, Database database, SqlGeneratorChain sqlGeneratorChain) {
     	
     	if (database instanceof InformixDatabase) {
@@ -117,7 +119,7 @@ public class CreateTableGenerator extends AbstractSqlGenerator<CreateTableStatem
                         additionalSql.add(new UnparsedSql("alter sequence "+database.escapeSequenceName(statement.getCatalogName(), statement.getSchemaName(), sequenceName)+" start with "+autoIncrementConstraint.getStartWith(), new Sequence().setName(sequenceName).setSchema(statement.getCatalogName(), statement.getSchemaName())));
                     }
                 } else {
-                    LogFactory.getLogger().warning(database.getShortName()+" does not support autoincrement columns as requested for "+(database.escapeTableName(statement.getCatalogName(), statement.getSchemaName(), statement.getTableName())));
+                    LogFactory.getLogger().warning(database.getShortName()+" does not support autoincrement columns as request for "+(database.escapeTableName(statement.getCatalogName(), statement.getSchemaName(), statement.getTableName())));
                 }
             }
 
@@ -125,12 +127,7 @@ public class CreateTableGenerator extends AbstractSqlGenerator<CreateTableStatem
                 buffer.append(" NOT NULL");
             } else {
                 if (database instanceof SybaseDatabase || database instanceof SybaseASADatabase || database instanceof MySQLDatabase) {
-                    if (database instanceof MySQLDatabase && statement.getColumnTypes().get(column).getName().equalsIgnoreCase("timestamp")) {
-                        //don't append null
-                    } else {
-                        buffer.append(" NULL");
-                    }
-
+                    buffer.append(" NULL");
                 }
             }
 
@@ -145,7 +142,6 @@ public class CreateTableGenerator extends AbstractSqlGenerator<CreateTableStatem
 
         buffer.append(",");
 
-        // TODO informixdb
         if (!( (database instanceof SQLiteDatabase) &&
                 isSinglePrimaryKeyColumn &&
                 isPrimaryKeyAutoIncrement) &&
@@ -158,7 +154,7 @@ public class CreateTableGenerator extends AbstractSqlGenerator<CreateTableStatem
             // This constraint is added after the column type.
 
             if (statement.getPrimaryKeyConstraint() != null && statement.getPrimaryKeyConstraint().getColumns().size() > 0) {
-                if (!(database instanceof InformixDatabase)) {
+                if (database.supportsPrimaryKeyNames()) {
                     String pkName = StringUtils.trimToNull(statement.getPrimaryKeyConstraint().getConstraintName());
                     if (pkName == null) {
                         // TODO ORA-00972: identifier is too long

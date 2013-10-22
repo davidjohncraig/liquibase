@@ -1,8 +1,10 @@
 package liquibase.datatype.core;
 
 import liquibase.database.Database;
+import liquibase.database.core.MSSQLDatabase;
 import liquibase.datatype.DataTypeInfo;
 import liquibase.datatype.LiquibaseDataType;
+import liquibase.util.StringUtils;
 
 @DataTypeInfo(name="char", aliases = "java.sql.Types.CHAR", minParameters = 0, maxParameters = 1, priority = LiquibaseDataType.PRIORITY_DEFAULT)
 public class CharType extends LiquibaseDataType {
@@ -18,7 +20,11 @@ public class CharType extends LiquibaseDataType {
         if (val.startsWith("'")) {
             return val;
         } else {
-            return "'"+val+"'";
+            if (database instanceof MSSQLDatabase && !StringUtils.isAscii(val)) {
+                return "N'"+database.escapeStringForDatabase(val)+"'";
+            }
+
+            return "'"+database.escapeStringForDatabase(val)+"'";
         }
     }
 

@@ -4,8 +4,16 @@ import java.sql.*;
 
 import liquibase.CatalogAndSchema;
 import liquibase.database.AbstractJdbcDatabase;
+import liquibase.database.Database;
 import liquibase.database.DatabaseConnection;
 import liquibase.database.jvm.JdbcConnection;
+import liquibase.executor.Executor;
+import liquibase.executor.ExecutorService;
+import liquibase.statement.SqlStatement;
+import liquibase.statement.core.CreateDatabaseChangeLogLockTableStatement;
+import liquibase.statement.core.DropTableStatement;
+import liquibase.statement.core.InitializeDatabaseChangeLogLockTableStatement;
+import liquibase.statement.core.RawSqlStatement;
 import liquibase.structure.DatabaseObject;
 import liquibase.exception.DatabaseException;
 import liquibase.logging.LogFactory;
@@ -28,10 +36,12 @@ public class DerbyDatabase extends AbstractJdbcDatabase {
         determineDriverVersion();
     }
 
+    @Override
     public boolean isCorrectDatabaseImplementation(DatabaseConnection conn) throws DatabaseException {
         return "Apache Derby".equalsIgnoreCase(conn.getDatabaseProductName());
     }
 
+    @Override
     public String getDefaultDriver(String url) {
         // CORE-1230 - don't shutdown derby network server
         if (url.startsWith("jdbc:derby://")) {
@@ -42,6 +52,7 @@ public class DerbyDatabase extends AbstractJdbcDatabase {
         return null;
     }
 
+    @Override
     public int getPriority() {
         return PRIORITY_DEFAULT;
     }
@@ -56,6 +67,7 @@ public class DerbyDatabase extends AbstractJdbcDatabase {
         return true;
     }
 
+    @Override
     public Integer getDefaultPort() {
         return 1527;
     }
@@ -73,6 +85,7 @@ public class DerbyDatabase extends AbstractJdbcDatabase {
         return objectName.toUpperCase();
     }
 
+    @Override
     public String getShortName() {
         return "derby";
     }
@@ -88,6 +101,7 @@ public class DerbyDatabase extends AbstractJdbcDatabase {
         }
     }
 
+    @Override
     public boolean supportsInitiallyDeferrableColumns() {
         return false;
     }
@@ -109,6 +123,7 @@ public class DerbyDatabase extends AbstractJdbcDatabase {
         }
     }
 
+    @Override
     public boolean supportsTablespaces() {
         return false;
     }
@@ -168,11 +183,11 @@ public class DerbyDatabase extends AbstractJdbcDatabase {
                     return;
                 }
             }
-            log.debug("Unable to load/access Apache Derby driver class " + "to check version");
+//            log.debug("Unable to load/access Apache Derby driver class " + "to check version");
             driverVersionMajor = -1;
             driverVersionMinor = -1;
         } catch (Exception e) {
-            log.debug("Unable to load/access Apache Derby driver class " + "org.apache.derby.tools.sysinfo to check version: " + e.getMessage());
+//            log.debug("Unable to load/access Apache Derby driver class " + "org.apache.derby.tools.sysinfo to check version: " + e.getMessage());
             driverVersionMajor = -1;
             driverVersionMinor = -1;
         }
@@ -195,4 +210,34 @@ public class DerbyDatabase extends AbstractJdbcDatabase {
     public boolean supportsCatalogInObjectName(Class<? extends DatabaseObject> type) {
         return true;
     }
+
+    @Override
+    public void checkDatabaseChangeLogLockTable() throws DatabaseException {
+        super.checkDatabaseChangeLogLockTable();
+
+        if (this.supportsBooleanDataType()) { //check if the changelog table is of an old smallint vs. boolean format
+            Executor executor = ExecutorService.getInstance().getExecutor(this);
+            String lockTable = this.escapeTableName(this.getLiquibaseCatalogName(), this.getLiquibaseSchemaName(), this.getDatabaseChangeLogLockTableName());
+            Object obj = executor.queryForObject(new RawSqlStatement("select min(locked) as test from " + lockTable + " fetch first row only"), Object.class);
+            if (!(obj instanceof Boolean)) { //wrong type, need to recreate table
+                executor.execute(new DropTableStatement(this.getLiquibaseCatalogName(), this.getLiquibaseSchemaName(), this.getDatabaseChangeLogLockTableName(), false));
+                executor.execute(new CreateDatabaseChangeLogLockTableStatement());
+                executor.execute(new InitializeDatabaseChangeLogLockTableStatement());
+            }
+        }
+    }
+
+    public boolean supportsBooleanDataType() {
+        if (getConnection() == null) {
+            return false; ///assume not;
+        }
+        try {
+            return this.getDatabaseMajorVersion() > 10
+                    || (this.getDatabaseMajorVersion() == 10 && this.getDatabaseMinorVersion() > 7);
+        } catch (DatabaseException e) {
+            return false; //assume not
+        }
+    }
+
+
 }

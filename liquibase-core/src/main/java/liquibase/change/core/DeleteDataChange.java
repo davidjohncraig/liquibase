@@ -9,11 +9,12 @@ import liquibase.statement.core.DeleteStatement;
 public class DeleteDataChange extends AbstractModifyDataChange {
 
 
+    @Override
     public SqlStatement[] generateStatements(Database database) {
 
         DeleteStatement statement = new DeleteStatement(getCatalogName(), getSchemaName(), getTableName());
 
-        statement.setWhereClause(whereClause);
+        statement.setWhereClause(where);
 
         for (ColumnConfig whereParam : whereParams) {
             if (whereParam.getName() != null) {
@@ -27,6 +28,7 @@ public class DeleteDataChange extends AbstractModifyDataChange {
         };
     }
 
+    @Override
     public String getConfirmationMessage() {
         return "Data deleted from " + getTableName();
     }

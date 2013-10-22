@@ -1,6 +1,5 @@
 package liquibase.changelog;
 
-import liquibase.Contexts;
 import liquibase.change.Change;
 import liquibase.change.ChangeFactory;
 import liquibase.change.CheckSum;
@@ -107,7 +106,7 @@ public class ChangeSet implements Conditional, LiquibaseSerializable {
     /**
      * Runtime contexts in which the changeSet will be executed.  If null or empty, will execute regardless of contexts set
      */
-    private Contexts contexts;
+    private Set<String> contexts;
 
     /**
      * Databases for which this changeset should run.  The string values should match the value returned from Database.getShortName()
@@ -196,7 +195,13 @@ public class ChangeSet implements Conditional, LiquibaseSerializable {
         this.runOnChange = runOnChange;
         this.runInTransaction = runInTransaction;
         this.objectQuotingStrategy = quotingStrategy;
-        this.contexts = new Contexts(contextList);
+        if (StringUtils.trimToNull(contextList) != null) {
+            String[] strings = contextList.toLowerCase().split(",");
+            contexts = new HashSet<String>();
+            for (String string : strings) {
+                contexts.add(string.trim().toLowerCase());
+            }
+        }
         if (StringUtils.trimToNull(dbmsList) != null) {
             String[] strings = dbmsList.toLowerCase().split(",");
             dbmsSet = new HashSet<String>();
@@ -252,7 +257,7 @@ public class ChangeSet implements Conditional, LiquibaseSerializable {
                 database.setAutoCommit(!runInTransaction);
             }
 
-            executor.comment("Changeset " + toString());
+            executor.comment("Changeset " + toString(false));
             if (StringUtils.trimToNull(getComments()) != null) {
                 String comments = getComments();
                 String[] lines = comments.split("\n");
@@ -336,7 +341,7 @@ public class ChangeSet implements Conditional, LiquibaseSerializable {
                 for (Change change : getChanges()) {
                     if ((!(change instanceof DbmsTargetedChange)) || DatabaseList.definitionMatches(((DbmsTargetedChange) change).getDbms(), database, true)) {
                         database.executeStatements(change, databaseChangeLog, sqlVisitors);
-                        log.debug(change.getConfirmationMessage());
+                        log.info(change.getConfirmationMessage());
                     } else {
                         log.debug("Change " + change.getSerializedObjectName() + " not included for database " + database.getShortName());
                     }
@@ -410,7 +415,6 @@ public class ChangeSet implements Conditional, LiquibaseSerializable {
                 for (int i = changes.size() - 1; i >= 0; i--) {
                     Change change = changes.get(i);
                     database.executeRollbackStatements(change, sqlVisitors);
-                    log.debug(change.getConfirmationMessage());
                 }
             }
 
@@ -447,7 +451,7 @@ public class ChangeSet implements Conditional, LiquibaseSerializable {
         return author;
     }
 
-    public Contexts getContexts() {
+    public Set<String> getContexts() {
         return contexts;
     }
 
@@ -465,7 +469,7 @@ public class ChangeSet implements Conditional, LiquibaseSerializable {
 
     @Override
     public String toString() {
-        return toString(true);
+        return toString(false);
     }
 
     public String getComments() {
@@ -536,10 +540,10 @@ public class ChangeSet implements Conditional, LiquibaseSerializable {
             } else if (changeCount > 1) {
                 returnString.append(" (x").append(changeCount).append(")");
                 returnString.append(", ");
-                returnString.append(ChangeFactory.getInstance().getChangeMetaData(change).getDescription());
+                returnString.append(ChangeFactory.getInstance().getChangeMetaData(change).getName());
                 changeCount = 1;
             } else {
-                returnString.append(", ").append(ChangeFactory.getInstance().getChangeMetaData(change).getDescription());
+                returnString.append(", ").append(ChangeFactory.getInstance().getChangeMetaData(change).getName());
                 changeCount = 1;
             }
             lastChangeClass = change.getClass();
@@ -602,10 +606,12 @@ public class ChangeSet implements Conditional, LiquibaseSerializable {
         return false;
     }
 
+    @Override
     public PreconditionContainer getPreconditions() {
         return preconditions;
     }
 
+    @Override
     public void setPreconditions(PreconditionContainer preconditionContainer) {
         this.preconditions = preconditionContainer;
     }
@@ -633,10 +639,12 @@ public class ChangeSet implements Conditional, LiquibaseSerializable {
         return objectQuotingStrategy;
     }
  
+    @Override
     public String getSerializedObjectName() {
         return "changeSet";
     }
 
+    @Override
     public Set<String> getSerializableFields() {
         return new HashSet<String>(Arrays.asList(
                 "id",
@@ -652,6 +660,7 @@ public class ChangeSet implements Conditional, LiquibaseSerializable {
 
     }
 
+    @Override
     public Object getSerializableFieldValue(String field) {
         if (field.equals("id")) {
             return this.getId();
@@ -723,6 +732,7 @@ public class ChangeSet implements Conditional, LiquibaseSerializable {
         throw new UnexpectedLiquibaseException("Unexpected field request on changeSet: "+field);
     }
 
+    @Override
     public SerializationType getSerializableFieldType(String field) {
         if (field.equals("comment") || field.equals("changes") || field.equals("rollback")) {
             return SerializationType.NESTED_OBJECT;

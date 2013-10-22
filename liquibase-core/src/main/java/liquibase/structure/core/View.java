@@ -48,9 +48,9 @@ public class View extends Relation {
         return viewStr;
     }
 
+    @Override
     public View setName(String name) {
-        this.setAttribute("name", name);
-        return this;
+        return (View) super.setName(name);
     }
 
 
